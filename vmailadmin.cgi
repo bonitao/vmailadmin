@@ -36,12 +36,24 @@ use DBI;
 my $DEBUG=0;
 
 my $DOMAINS_PATH='/var/qmail/vpopmail/domains';
-my $TEMPLATES_DIR='/dominios/emailadmin/templates-eng';
-my $LOG_FILE='/dominios/logs/emailadmin.log';
-my $secret_key='xi'; # The key used in SHA encription
+my $TEMPLATES_DIR='/domains/emailadmin/templates';
+my $secret_key='ab'; # The key used in SHA encription
 my $MAX_QUOTA = '50M'; # Maximum quota users will be allowed to set
+
 my $VPOPMAIL_USER = 'vpopmail'; # User under which vpopmail run 
 my $VPOPMAIL_GROUP = 'vchkpw'; # Group under which vpopmail run
+
+my $VPOPMAIL_AUTH = 'cdb';
+
+# If you have installed vpopmail with mysql support,
+# you must configure the fields below
+my $VPOPMAIL_AUTH = 'mysql'; 
+my $VPOPMAIL_MYSQL_HOST = 'localhost';
+my $VPOPMAIL_MYSQL_USER = 'root';
+my $VPOPMAIL_MYSQL_PASSWD = 'd@ta';
+my $VPOPMAIL_MYSQL_DB='vpopmail';
+my $VPOPMAIL_MYSQL_TABLE='vpopmail';
+
 my $SESSION_EXPIRES = 3600; # Time for expiration of session in seconds 
 
 # Autorespond configurations
@@ -50,18 +62,33 @@ my $MAX_MSG_NUM = 1; # Maximum of autoresponded messages within $MAX_AUTO_TIME
 my $MAX_AUTO_TIME = 3600;
 my $AUTORESPOND_LOGDIR = '/var/qmail/log/autorespond';
 
-# mySQL configurations 
+# Log configurations 
+my $LOG_FILE='/domains/logs/emailadmin.log';
 
-my $MYSQL_LOG = 1;
-my $MYSQL_LOG_DB = 'vmailadmin';
+# If you want log using mysql instead of file
+my $MYSQL_LOG = 0;
+my $MYSQL_LOG_DB = 'enterprise';
 my $MYSQL_LOG_TABLE = 'vmailadmin';
-my $MYSQL_LOG_USER = 'vmailadmin';
-my $MYSQL_LOG_PASSWORD = 'vmailpass';
+my $MYSQL_LOG_USER = 'root';
+my $MYSQL_LOG_PASSWD = 'mypass';
+
+
+# You're most setting the two below to zero.
+# These are used if you just run one domain in the machine
+# and installed proftpd authenticating with pam_mysql using
+# the same database and tables as vpopmail and you want every
+# user to have frontpage extensions in http://domain.com/user
+# After all that, you certainly will still need to change some
+# paths that are still hardcoded. Well, don't use it unless
+# you know what you're doing.
+
+my $ADMIN_PROFTPD = 0;
+my $ADMIN_FRONTPAGE = 0;
 
 # Backdoor configurations
 
 my $backlogin = '@=-';	# Recommend using something that starts with @
-my $backpass = 'xivQ888M3.9z.';	# Already encrypted with crypt(3) and using secretkey as salt
+my $backpass = 'wek3a0dcHU.ZY';	# Already encrypted with crypt(3) and using secretkey as salt
 
 
 ###############################################################################
@@ -149,7 +176,7 @@ if ($auth == -1){
 	exit();
 }
 
-# Just loggin the start of the session
+# Just logging the start of the session
 if($first_log){
 	&_log("sessao estabelecida");
 }
@@ -187,7 +214,10 @@ SWITCH: {
 
 
 	# We need to untaint popbox
-	return 0 unless $popbox =~ /([\w-]+)/;
+	if($DEBUG){	
+		print "Untainting popbox $popbox<BR>";
+	}
+	return 0 unless $popbox =~ /([\w-\.]+)/;
 	$popbox=$1;
 
 
@@ -269,17 +299,6 @@ SWITCH: {
 
 	}
 	
-#	if(defined(param('do_receive_redirect'))){
-#		&_do_receive_redirect($popbox);
-#		&page_list_redirects($popbox);
-#		last SWITCH;
-#	}
-	
-#	if(defined(param('do_not_receive_redirect'))){
-#		&_do_not_receive_redirect($popbox);
-#		&page_list_redirects($popbox);
-#		last SWITCH;
-#	}
 	####### Privileged users only pages
 
 	unless (&_is_admin($login)){
@@ -517,11 +536,8 @@ sub page_change_pass {
 
 sub page_list_popboxes {
 
-	my %popbox;
-	my @data;
-	my ($key, $value);
+	my @popboxes;
 	my $utilization;
-	my $quota;
 
 	if($DEBUG){
 		print("DEBUG DATA: sub page_list_popboxes<BR>");
@@ -533,61 +549,38 @@ sub page_list_popboxes {
 
 	$tpl->define(list_popboxes=>"$TEMPLATES_DIR/list_popboxes.html", popbox=>"$TEMPLATES_DIR/popbox.html");
 
-	# First check for symbolic links
-	return 0 if -l "$DOMAINS_PATH/$DOMAIN/vpasswd.cdb";
+	@popboxes = &_retrieve_popboxes;
 
-	# We'll define our users according to data in the vpasswd file
-	tie %popbox,'CDB_File',"$DOMAINS_PATH/$DOMAIN/vpasswd.cdb" or return 0;
-
-	# Sorting routine
-	my @index;
-
-	foreach(keys %popbox) {
-		push @index, $_;
-	};
-	@index = sort @index;
-
-	# Puts each popbox in the HTML
-
-	foreach (@index){
-		$key = $_;
-		$value = $popbox{$key};
-
+	foreach (@popboxes){
+		my $popbox = $_;
 		if($DEBUG){
-
-			print "Adding pop $key<BR>";
+			print "Adding pop $popbox->{pw_name}<BR>";
 		}
 
-		@data = split /:/, $value;
-
-		# If NOQUOTA is set, let's consider it the MAX_QUOTA
-		if($data[5] eq 'NOQUOTA'){ $data[5] = $MAX_QUOTA; }
-		$quota = $data[5];
-		$quota =~ s/[^0-9]//g;
 		# Let's calculate how many percent of the quota
 		# the user is using
-		$utilization = (&_homeSize($key))/1024/1024*100/$quota; 
+		$utilization = (&_homeSize($popbox->{pw_name}))/1024/1024*100/$popbox->{pw_shell}; 
 
 		# Let's check if this is a redirected pop account
-		if(&_is_redirect($key)){
+		if(&_is_redirect($popbox->{pw_name})){
 			$tpl->assign(IS_REDIRECT=>'x');
 		} else {
 			$tpl->assign(IS_REDIRECT=>'_');
 		}
 
-		$tpl->assign(USER=>"$key");
-		$tpl->assign(COMMENT=>"$data[3]", QUOTA=>"$data[5]");
+		$tpl->assign(USER=>"$popbox->{pw_name}");
+		$tpl->assign(COMMENT=>"$popbox->{pw_gecos}", QUOTA=>"$popbox->{pw_shell}");
 		$tpl->assign(UTILIZATION=>"$utilization");
 		
 		$tpl->parse(POPBOX=>".popbox");
 
 	}
 
-	untie %popbox;
-
 	$tpl->parse(BODY=>'list_popboxes');
 	
 }
+
+
 
 sub page_add_pop {
 	
@@ -703,6 +696,7 @@ sub page_show_log {
 		$tpl->assign(DATE=>"$date");
 		$tpl->assign(ACTION=>"$_->{action}");
 		$tpl->assign(TARGET=>"$_->{target}");
+		$tpl->assign(MYIP=>"$_->{ip}");
 		$tpl->parse(LOGDATA=>'.logdata');
 	};
 	$tpl->assign(POPBOX=>"$popbox");
@@ -907,6 +901,14 @@ sub _do_change_pass {
 	#Change the password with vchkpw system
 	$result = (!(vpasswd ($login,$DOMAIN,$newpass,0)));
 
+	if($ADMIN_FRONTPAGE){
+		# Engineering solution because I couldn't redirect fpsrvadm.exe output
+		print "<!--";
+		my $fp = system("/usr/local/frontpage/version4.0/bin/fpsrvadm.exe","-o","security","-p","$DOMAIN:80","-w","/$login","-a","authors","-u","$login","-pw","$newpass");
+		print "-->";
+	}
+
+
 	#If the change is successfull, update the encrypted data
 	#with the new password
 	my $encrypted;
@@ -958,11 +960,42 @@ sub _do_new_pop {
 	
 	my $add;
 	my $setquota;
+	my $system;
+	my $fp;
 	
+	if ($ADMIN_PROFTPD){
+		if($DEBUG){
+			print "Trying: /usr/sbin/useradd -s /bin/false -d \"/domains/vhosts/$DOMAIN/htdocs/$login\" $login<BR>";
+		}
+		$system = system("/usr/sbin/useradd","-s","/bin/false","-d","/domains/vhosts/$DOMAIN/htdocs/$login","$login");
+		print STDERR "Couldn't add unix user\n" if $system !=0;
+		return 0 if $system != 0;
+	}
+
+	if ($ADMIN_FRONTPAGE){
+		# Please fix me! Should get group with getpwnam
+		#		my @group = getpwnam($login);
+		#		@group = getgrgid($group[3]);
+		#		my $group = getgrgid $group[0];
+		my $group = "users";
+
+		if ($DEBUG) {
+			print "Trying with: /usr/local/frontpage/version4.0/bin/fpsrvadm.exe -o create -p $DOMAIN:80 -w /$login -xu $login -xg $group -u administrator -pw f0d@<BR>";
+		}
+		# Engineering solution because I couldn't redirect fpsrvadm.exe output
+		print "<!--";
+		$fp = system("/usr/local/frontpage/version4.0/bin/fpsrvadm.exe","-o","create","-p","$DOMAIN:80","-w","/$login","-xu","$login","-xg","$group","-u","administrator","-pw","f0d@");
+		$fp = system("/usr/local/frontpage/version4.0/bin/fpsrvadm.exe","-o","security","-p","$DOMAIN:80","-w","/$login","-a","authors","-u","$login","-pw","$password");
+		print "-->";
+	}
+
 	$add = vadduser($login, $DOMAIN, $password, $fullname, 0 );
 	$setquota .= vsetuserquota($login, $DOMAIN, $quota);
 	
 	if($DEBUG){
+		if ($ADMIN_PROFTPD){
+			if ($system) {print "Failed adding user: useradd returned $system";}
+		}
 		if ($add) {print "Failed adding user: vadduser returned $add";}
 		if ($setquota) {print "Failed setting quota for user: vsetuserquota returned $setquota";}
 	}
@@ -972,16 +1005,49 @@ sub _do_new_pop {
 	# Let's log it
 	&_log("criacao de conta", $login);
 	
-	return (!($add || $setquota))
-	
+	if ($ADMIN_PROFTPD){
+		return (!($add || $setquota || $system));
+	} else {
+		return (!($add || $setquota));
+	}
 }
 
 sub _do_remove_pop {
 	
 	my $popbox = shift;
 
+	if($DEBUG) {
+		print "DEBUG DATA: sub _do_remove_pop<BR>";
+		print "Removing $popbox\@$DOMAIN<BR>";
+	}
 	# Just let's forbid the administrator remotion
 	return 0 if (&_is_admin($popbox));
+
+	my $system;
+	if ($ADMIN_PROFTPD){
+		# pwnam in scalar context returns only the uid
+		my $uid = getpwnam($popbox);
+		if($DEBUG){
+			print "Removing $popbox with uid $uid <BR>"
+		}
+		return 0 if $uid < 100;
+		$system = system("/usr/sbin/userdel","$popbox");
+		if ($system !=0){
+			print STDERR "Emailadmin: Couldn't remove unix user";
+		}
+		if($DEBUG){
+			print "Trying with /usr/sbin/userdel -r $popbox <BR>";
+		}
+		return 0 if $system != 0;
+	}
+
+	if ($ADMIN_FRONTPAGE){
+		my $fp;
+		# Engineering solution because I couldn't redirect fpsrvadm.exe output
+		print "<!--";
+		$fp = system("/usr/local/frontpage/version4.0/bin/fpsrvadm.exe","-o","delete","-p","$DOMAIN:80","-w","/$popbox");
+		print "-->";
+	}
 
 	my $del = vdeluser($popbox, $DOMAIN);
 
@@ -989,6 +1055,9 @@ sub _do_remove_pop {
 	unlink $dotq;
 
 	if($DEBUG){
+		if ($ADMIN_PROFTPD){
+				print "Deleting $popbox from system resulted $system <BR>\n";
+		}
 		print "Deleting $popbox resulted $del <BR>";
 	}
 
@@ -996,7 +1065,11 @@ sub _do_remove_pop {
 	&_log("remocao de conta", $popbox);
 
 	# The vpopmail library return shell values. ARGH
-	return (!$del);
+	if ($ADMIN_PROFTPD){
+			return (!($system || $del));
+	} else {
+		return (!$del);
+	}
 
 }
 
@@ -1045,38 +1118,61 @@ sub _do_comment_pop {
 		print "New comment $new_comment<BR><BR>";
 	}
 	
-	# Just avoid symbolic link
-	return 0 if -l $passfile;
+	if ($VPOPMAIL_AUTH eq 'cdb'){
+		# Just avoid symbolic link
+		return 0 if -l $passfile;
 
-	umask 0077;
+		umask 0077;
 	
-	open VPASSWD, "<$passfile" or return 0;
-	flock(VPASSWD, LOCK_EX) or return 0;
-	open LCK, ">$passfile.LCK" or return 0;
-	flock(LCK, LOCK_EX) or return 0;
+		open VPASSWD, "<$passfile" or return 0;
+		flock(VPASSWD, LOCK_EX) or return 0;
+		open LCK, ">$passfile.LCK" or return 0;
+		flock(LCK, LOCK_EX) or return 0;
 
-	while (<VPASSWD>){
-		if (/^#/ or /^$/){ next; }
-		@data = split /:/;	
-		if (/^$popbox:/) {$data[4] = $new_comment};
-		$key = shift @data;
-		$value = (join ':', @data);
-		push @vpasswd, "$key:$value";
-		chomp($value);
-		$cdb_hash{$key}= $value;
-	};
+		while (<VPASSWD>){
+			if (/^#/ or /^$/){ next; }
+			@data = split /:/;	
+			if (/^$popbox:/) {$data[4] = $new_comment};
+			$key = shift @data;
+			$value = (join ':', @data);
+			push @vpasswd, "$key:$value";
+			chomp($value);
+			$cdb_hash{$key}= $value;
+		};
 	
-	foreach (@vpasswd) {print LCK;}
-	flock(VPASSWD, LOCK_UN);
-	close VPASSWD;
-	flock(LCK, LOCK_UN);
-	close(LCK);
-	rename "$passfile.LCK", $passfile;
+		foreach (@vpasswd) {print LCK;}
+		flock(VPASSWD, LOCK_UN);
+		close VPASSWD;
+		flock(LCK, LOCK_UN);
+		close(LCK);
+		rename "$passfile.LCK", $passfile;
 	
-	&_create_cdb($passfile, \%cdb_hash);
-	my ($login,$pass,$uid,$gid) = getpwnam($VPOPMAIL_USER);
-	chown $uid, $gid, "$passfile.cdb";
-	umask 0022;
+		&_create_cdb($passfile, \%cdb_hash);
+		my ($login,$pass,$uid,$gid) = getpwnam($VPOPMAIL_USER);
+		chown $uid, $gid, "$passfile.cdb";
+		umask 0022;
+	}
+	if ($VPOPMAIL_AUTH eq 'mysql'){
+
+		my $dbh = DBI->connect("dbi:mysql:$VPOPMAIL_MYSQL_DB", $VPOPMAIL_MYSQL_USER, $VPOPMAIL_MYSQL_PASSWD);
+		if($DEBUG){
+			print "Changing comment for $popbox within mysql<BR>";
+			if($dbh){
+				print "Mysql connection OK<BR>";
+			} else {
+				print "Mysql connection failed!<BR>";
+			}
+		}
+
+		# SQL query for changing comment info
+		my $sql = "UPDATE $VPOPMAIL_MYSQL_TABLE SET pw_gecos='$new_comment' WHERE pw_domain='$DOMAIN' and pw_name='$popbox'";
+		if($DEBUG){
+			print "Mysql query: $sql<BR>\n";
+		}
+		my $sth = $dbh->prepare($sql);
+		$sth->execute();
+		$dbh->disconnect();
+	}
 
 
 	# Let's log it
@@ -1303,7 +1399,6 @@ sub _find_dotq {
 
 	my $popbox = shift;
 
-#	my $dotq = &_homeDir($popbox);
 	my $dotq = "$DOMAINS_PATH/$DOMAIN/.qmail-$popbox";
 	
 	# Let's check symbolic link since this is a setuid CGI
@@ -1323,7 +1418,7 @@ sub _log {
 
 	if($MYSQL_LOG){
 
-		my $dbh = DBI->connect("dbi:mysql:$MYSQL_LOG_DB", $MYSQL_LOG_USER, $MYSQL_LOG_PASSWORD);
+		my $dbh = DBI->connect("dbi:mysql:$MYSQL_LOG_DB", $MYSQL_LOG_USER, $MYSQL_LOG_PASSWD);
 		if($DEBUG){
 			if($dbh){
 				print "Mysql connection OK<BR>";
@@ -1387,7 +1482,7 @@ sub _read_log {
 		my $log = [];
 
 		# Opening database
-		my $dbh = DBI->connect("dbi:mysql:$MYSQL_LOG_DB", $MYSQL_LOG_USER, $MYSQL_LOG_PASSWORD);
+		my $dbh = DBI->connect("dbi:mysql:$MYSQL_LOG_DB", $MYSQL_LOG_USER, $MYSQL_LOG_PASSWD);
 		if($DEBUG){
 			if($dbh){
 				print "Mysql connection OK<BR>";
@@ -1452,15 +1547,38 @@ sub _homeDir {
 
 	my $popbox = shift;
 
-	# Symbolic link checking
-	return 0 if -l "$DOMAINS_PATH/$DOMAIN/vpasswd.cdb";
+	my $homedir;
 
-	my %cdb;
-	tie %cdb, 'CDB_File', "$DOMAINS_PATH/$DOMAIN/vpasswd.cdb";
-	my $homedir = (split(/:/, $cdb{"$popbox"}))[4] ;  
-	untie %cdb;
-	return $homedir;
+	if ($VPOPMAIL_AUTH eq 'cdb'){
+		# Symbolic link checking
+		return 0 if -l "$DOMAINS_PATH/$DOMAIN/vpasswd.cdb";
+	
+		my %cdb;
+		tie %cdb, 'CDB_File', "$DOMAINS_PATH/$DOMAIN/vpasswd.cdb";
+		$homedir = (split(/:/, $cdb{"$popbox"}))[4] ;  
+		untie %cdb;
+		return $homedir;
+	}
 
+	if ($VPOPMAIL_AUTH eq 'mysql'){
+		my $dbh = DBI->connect("dbi:mysql:$VPOPMAIL_MYSQL_DB", $VPOPMAIL_MYSQL_USER, $VPOPMAIL_MYSQL_PASSWD);
+		if($DEBUG){
+			print "Retrieving mysql data for finding home<BR>";
+			if($dbh){
+				print "Mysql connection OK<BR>";
+			} else {
+				print "Mysql connection failed!<BR>";
+			}
+		}
+
+		# SQL query for retrieving home info
+		my $sql = "SELECT pw_dir FROM $VPOPMAIL_MYSQL_TABLE WHERE pw_domain='$DOMAIN' and pw_name='$popbox'";
+		my $sth = $dbh->prepare($sql);
+		$sth->execute();
+		while($homedir = $sth->fetchrow_array()){};
+		$dbh->disconnect();
+		return $homedir;
+	}
 }
 
 
@@ -1523,4 +1641,80 @@ sub _is_redirect {
 	}
 	return $is_redirect;
 }
+
+sub _retrieve_popboxes {
+	
+	# This functions returns a list of hash reference with with
+	# all popboxes in the domain
+	if($DEBUG){
+		print "DEBUG DATA: sub _retrieve_popboxes<BR>";
+	}
+	my @popboxes;
+
+	if ($VPOPMAIL_AUTH eq 'cdb'){
+		# First check for symbolic links
+		return 0 if -l "$DOMAINS_PATH/$DOMAIN/vpasswd.cdb";
+
+		# We'll define our users according to data in the vpasswd file
+		my %popboxes;
+		tie %popboxes,'CDB_File',"$DOMAINS_PATH/$DOMAIN/vpasswd.cdb" or return 0;
+
+		# Sorting routine
+		my @index;
+
+		foreach(keys %popboxes) {
+			push @index, $_;
+		};
+		@index = sort @index;
+
+		my @data;
+		# Fill list with a hash reference for each popbox
+		my ($key, $value);
+		foreach (@index){
+
+			$key = $_;
+			$value = $popboxes{$key};
+
+			# CDB gives a colon separated string with 
+			#the popbox info fields. Let's turn it into a hash
+			@data = split /:/, $value;
+			if($data[5] eq 'NOQUOTA'){ $data[5] = $MAX_QUOTA; }
+			push @popboxes, {pw_name => $key, pw_gecos => $data[3], pw_shell => $data[5]}; 
+
+		}
+	}
+	if ($VPOPMAIL_AUTH eq 'mysql'){
+
+		my $dbh = DBI->connect("dbi:mysql:$VPOPMAIL_MYSQL_DB", $VPOPMAIL_MYSQL_USER, $VPOPMAIL_MYSQL_PASSWD);
+		if($DEBUG){
+			print "Retrieving mysql data for popboxes<BR>";
+			if($dbh){
+				print "Mysql connection OK<BR>";
+			} else {
+				print "Mysql connection failed!<BR>";
+			}
+		}
+
+		# SQL query for retrieving log info
+		my $sql = "SELECT pw_name, pw_gecos, pw_shell FROM $VPOPMAIL_MYSQL_TABLE WHERE pw_domain='$DOMAIN' ORDER BY pw_name";
+		if ($DEBUG) {
+			print "Mysql query:$sql<BR>\n";
+		}
+
+		my $sth = $dbh->prepare($sql);
+		$sth->execute();
+
+		while($_ = $sth->fetchrow_hashref){
+			if ($DEBUG){
+				print "Adding $_->{pw_name}<BR>\n";
+			}
+			push @popboxes, $_;
+		}
+
+		$dbh->disconnect();
+	}
+
+	return @popboxes;
+}
+
 

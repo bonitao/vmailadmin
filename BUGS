@@ -1,0 +1,17 @@
+Fixed bugs:
+
+0.7.4
+01/2001 
+Logs page always show current ip
+JavaScripts doesn't allow pass change with just one user
+12/2000
+remove .qmail-user with user
+remove .qmail-user when it's empty
+template/new_pop.html javascript new_comment changed for new_name
+Incorrectly confirmed password sends form 
+11/2000
+Flock use was not ok. Using rename to do atomic ops.
+
+Open bugs:
+Flock use is not perfect yet
+Using BODY variable in function page_autoresponse makes code confuse

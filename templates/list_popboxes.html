@@ -1,15 +1,18 @@
 <H2 ALIGN=CENTER> Caixas postais no dominio $DOMAIN </H2>
 <CENTER><TABLE>
-<TR>
+<TR ALIGN=CENTER>
 <TD><INPUT TYPE=SUBMIT NAME="page_add_pop" VALUE="Adicionar" onclick="document.main_form.button.value='add_pop'"></TD>
-<TD><INPUT TYPE=SUBMIT NAME="do_remove_pop" VALUE="Remover" onclick="document.main_form.button.value='remove_pop'"></TD>
-<TD><INPUT TYPE=SUBMIT NAME="page_quota_pop" VALUE="Quota" onclick="document.main_form.button.value=''"></TD>
-<TD><INPUT TYPE=SUBMIT NAME="page_comment_pop" VALUE="Comentario" onclick="document.main_form.button.value=''"></TD>
-<TD><INPUT TYPE=SUBMIT NAME="page_change_pass" VALUE="Senha" onclick="document.main_form.button.value=''"></TD>
-<TD><INPUT TYPE=SUBMIT NAME="page_redirects" VALUE="Redirecionamentos" onclick="document.main_form.button.value=''"></TD>
-</TR></TABLE></CENTER>
-<TABLE WIDTH=100%>
-<TR><TD></TD><TD>Conta</TD><TD>Comentario</TD><TD>Quota</TD><TD>Utilizacao</TD>
+<TD><INPUT TYPE=SUBMIT NAME="do_remove_pop"  onclick="document.main_form.button.value='remove_pop'" VALUE="Remover"></TD>
+<TD><INPUT TYPE=SUBMIT NAME="page_quota_pop"  onclick="document.main_form.button.value=''" VALUE="Quota"></TD>
+<TD><INPUT TYPE=SUBMIT NAME="page_change_pass" onclick="document.main_form.button.value=''" VALUE="Senha"></TD>
+</TR></TABLE>
+<TABLE><TR ALIGN = CENTER>
+<TD><INPUT TYPE=SUBMIT NAME="page_comment_pop" onclick="document.main_form.button.value=''" VALUE="Comentário"></TD>
+<TD><INPUT TYPE=SUBMIT NAME="page_redirects" onclick="document.main_form.button.value=''" VALUE="Redirecionamentos"></TD>
+<TD><INPUT TYPE=SUBMIT NAME="page_autoresponse" onclick="document.main_form.button.value=''" VALUE="Resposta automática"></TD><TD></TD>
+</TR></TABLE></CENTER><BR>
+<TABLE WIDTH=100% CELLSPACING=0>
+<TR><TD></TD><TD>Conta</TD><TD>Comentário</TD><TD>Quota</TD><TD>Utilização</TD>
 <TD>Redirecionada</TD></TR>
 $POPBOX
 </TABLE>

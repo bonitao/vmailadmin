@@ -1,0 +1,48 @@
+<H2 ALIGN=CENTER> Popboxes for domain $DOMAIN </H2>
+<CENTER><TABLE>
+<TR ALIGN=CENTER>
+<TD><INPUT TYPE=SUBMIT NAME="page_add_pop" VALUE="Add" onclick="document.main_form.button.value='add_pop'"></TD>
+<TD><INPUT TYPE=SUBMIT NAME="do_remove_pop"  onclick="document.main_form.button.value='remove_pop'" VALUE="Remove"></TD>
+<TD><INPUT TYPE=SUBMIT NAME="page_quota_pop"  onclick="document.main_form.button.value=''" VALUE="Quota"></TD>
+<TD><INPUT TYPE=SUBMIT NAME="page_change_pass" onclick="document.main_form.button.value=''" VALUE="Password"></TD>
+</TR></TABLE>
+<TABLE><TR ALIGN = CENTER>
+<TD><INPUT TYPE=SUBMIT NAME="page_comment_pop" onclick="document.main_form.button.value=''" VALUE="Comment"></TD>
+<TD><INPUT TYPE=SUBMIT NAME="page_redirects" onclick="document.main_form.button.value=''" VALUE="Redirects"></TD>
+<TD><INPUT TYPE=SUBMIT NAME="page_autoresponse" onclick="document.main_form.button.value=''" VALUE="Automatic answer"></TD><TD></TD>
+</TR></TABLE></CENTER><BR>
+<TABLE WIDTH=100% CELLSPACING=0>
+<TR><TD></TD><TD>Account</TD><TD>Comment</TD><TD>Quota</TD><TD>Utilization</TD>
+<TD>Redirected</TD></TR>
+$POPBOX
+</TABLE>
+
+<INPUT TYPE=HIDDEN NAME=button VALUE="">
+<SCRIPT LANGUAGE="JavaScript">
+function validate_form(){
+	var form = document.main_form;
+	var button = form.button.value;
+
+	var popbox = false;
+	if(button != 'add_pop'){
+		for(i=0; i< form.popbox.length; i++){
+			if(form.popbox[i].checked){
+				popbox=form.popbox[i];
+			}
+		}			
+		if(!popbox){ 
+			alert("You must choose an account!");
+			return false;
+		};
+	}
+	if(button == 'remove_pop'){
+		if(popbox.value == 'postmaster'){
+			alert("You can't remove the postmaster user!");
+			return false;
+		}
+		return confirm("Really remove " + popbox.value + "?");
+	}
+	return true;
+}
+</SCRIPT>
+

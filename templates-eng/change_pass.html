@@ -1,7 +1,7 @@
 <CENTER>
-<H2 ALIGN=CENTER>Mudanca de senha para $POPBOX@$DOMAIN</H2>
-<CENTER>Nova senha: <INPUT TYPE=PASSWORD SIZE=8 NAME=newpass><BR>
-Confirmacao: <INPUT TYPE=PASSWORD SIZE=8 NAME=newpass2><BR>
+<H2 ALIGN=CENTER>Password change for $POPBOX@$DOMAIN</H2>
+<CENTER>New password: <INPUT TYPE=PASSWORD SIZE=8 NAME=newpass><BR>
+Confirmation: <INPUT TYPE=PASSWORD SIZE=8 NAME=newpass2><BR>
 <INPUT TYPE=SUBMIT VALUE=Submit>
 </CENTER>
 
@@ -12,21 +12,21 @@ Confirmacao: <INPUT TYPE=PASSWORD SIZE=8 NAME=newpass2><BR>
 function validate_form(){
 	var form = document.main_form;
 	if(form.newpass.value.length < 4){
-		alert("Sua senha deve conter no minimo 4 caracteres");
+		alert("Your password must have at least 4 characters");
 		return false;
 	}
 	var regexp = new RegExp(form.newpass.value, 'i');
 	if(regexp.test(form.popbox.value)){
-		alert("Seu login nao pode conter sua senha!");
+		alert("Your login cannot contain your password!");
 		return false;
 	}
 	regexp = new RegExp(form.popbox.value, 'i');
 	if(regexp.test(form.newpass.value)){
-		alert("Sua senha nao pode conter seu login");
+		alert("Your password cannot contain you login!");
 		return false;
 	}
 	if(form.newpass.value != form.newpass2.value){
-		alert("Senha nao confirmada corretamente");
+		alert("Password not correctly confirmed!");
 		return false;
 	}
 	return true;

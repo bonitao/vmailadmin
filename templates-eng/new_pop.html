@@ -1,8 +1,8 @@
-<H2 ALIGN=CENTER>Criacao de conta pop</H2>
+<H2 ALIGN=CENTER>Pop account creation</H2>
 <CENTER>
 Login: <INPUT TYPE=TEXT NAME=new_login><BR>
-Senha: <INPUT TYPE=PASSWORD NAME=new_pass><BR>
-Nome: <INPUT TYPE=TEXT NAME=new_name><BR>
+Password: <INPUT TYPE=PASSWORD NAME=new_pass><BR>
+Name: <INPUT TYPE=TEXT NAME=new_name><BR>
 Quota: <INPUT TYPE=TEXT SIZE=2 NAME=new_quota>M<BR>
 <INPUT TYPE=SUBMIT VALUE="Criar">
 
@@ -12,17 +12,17 @@ Quota: <INPUT TYPE=TEXT SIZE=2 NAME=new_quota>M<BR>
 function validate_form(){
 	var form = document.main_form;
 	if(form.new_pass.value.length < 4){
-		alert("Sua senha deve conter no minimo 4 caracteres");
+		alert("Your password must have at least 4 characters");
 		return false;
 	}
 	var regexp = new RegExp(form.new_pass.value, 'i');
 	if(regexp.test(form.new_login.value)){
-		alert("Seu login nao pode conter sua senha!");
+		alert("Your login cannot contain your password!");
 		return false;
 	}
 	regexp = new RegExp(form.new_login.value, 'i');
 	if(regexp.test(form.new_pass.value)){
-		alert("Sua senha nao pode conter seu login");
+		alert("Your password cannot contain you login!");
 		return false;
 	}
 	//Some help for the user
@@ -35,7 +35,7 @@ function validate_form(){
 
 	var quota = form.new_quota.value;
 	if( (isNaN(quota)) || (quota > 50) ){
-		alert("A quota deve ser um inteiro entre 1 e 50");
+		alert("Quota must be an integer between 1 and 50");
 		return false;
 	}
 	return true;

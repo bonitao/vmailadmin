@@ -1,0 +1,29 @@
+Uhm, no easy install yet
+
+1. Edit vmailadmin.pl and change configuration session to suit your needs
+
+2. If using mysql log (by now it's useless, but will become important) create and setup appropriate users, tables and db.
+Log table should be like:
+create table vmailadmin ( id INT UNSIGNED AUTO_INCREMENT NOT NULL, user VARCHAR(31), domain varchar(255), ip VARCHAR(15), time INT(10) UNSIGNED NOT NULL, action VARCHAR(31), target VARCHAR(31), PRIMARY KEY(id), INDEX(time));
+The user you configured in vmailadmin.pl must have select and insert priviliges into this table
+
+3. Copy vmaildmin.pl and templates dir to some directory.
+Insert into httpd.conf an scriptalias or alias + .htaccess as you like
+
+4. If you haven't got perl patch against suidperl exploit, get it now.
+Search www.securityfocus.com for suidperl for more info.
+
+5. Set suid bit:
+chown root.root vmailadmin.pl
+chmod 4755 vmailadmin.pl
+
+6. Certify suidperl is suid
+chmod 4755 /usr/bin/suidperl
+
+7. Test it.
+
+8. Drink a beer or a milk or whatever
+
+If it doesn't work, read again the instalation and try it again.
+If not works anyway, send me an email (davi@sourceforge.net) and try to help
+you as much as I can.

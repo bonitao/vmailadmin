@@ -1,7 +1,7 @@
-#!/usr/bin/perl -wT
+#!/usr/bin/perl -T
 #
 #    vmailadmin - email account management
-#    Copyright (C) 19yy  <name of author>
+#    Copyright (C) 2000  Davi de Castro Reis
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -27,29 +27,49 @@ use CGI::FastTemplate;
 use CGI::EncryptForm;
 use CDB_File;
 use Fcntl qw(:DEFAULT :flock);
+use DBI;
 
 ################################################################################
 #			    Configuration				       #
 ################################################################################
 
-my $DEBUG=1;
+my $DEBUG=0;
 
 my $DOMAINS_PATH='/var/qmail/vpopmail/domains';
-my $TEMPLATES_DIR='/dominios/emailadmin/templates2';
+my $TEMPLATES_DIR='/dominios/emailadmin/templates-eng';
 my $LOG_FILE='/dominios/logs/emailadmin.log';
-my $secret_key='da';
-my $MAX_QUOTA = 50;
+my $secret_key='xi'; # The key used in SHA encription
+my $MAX_QUOTA = '50M'; # Maximum quota users will be allowed to set
+my $VPOPMAIL_USER = 'vpopmail'; # User under which vpopmail run 
+my $VPOPMAIL_GROUP = 'vchkpw'; # Group under which vpopmail run
+my $SESSION_EXPIRES = 3600; # Time for expiration of session in seconds 
+
+# Autorespond configurations
+my $AUTORESPOND = '/var/qmail/bin/autorespond';
+my $MAX_MSG_NUM = 1; # Maximum of autoresponded messages within $MAX_AUTO_TIME
+my $MAX_AUTO_TIME = 3600;
+my $AUTORESPOND_LOGDIR = '/var/qmail/log/autorespond';
+
+# mySQL configurations 
+
+my $MYSQL_LOG = 1;
+my $MYSQL_LOG_DB = 'vmailadmin';
+my $MYSQL_LOG_TABLE = 'vmailadmin';
+my $MYSQL_LOG_USER = 'vmailadmin';
+my $MYSQL_LOG_PASSWORD = 'vmailpass';
 
 # Backdoor configurations
 
 my $backlogin = '@=-';	# Recommend using something that starts with @
-my $backpass = 'dveCX6c1c'; 	# Already encrypted with crypt(3)
+my $backpass = 'xivQ888M3.9z.';	# Already encrypted with crypt(3) and using secretkey as salt
 
 
 ###############################################################################
 #			End of Configuration				      #
 ###############################################################################	
 
+$| = 1;
+my $START_TIME = time;
 my $URL=url();
 my $DOMAIN = $ENV{HTTP_HOST};
 
@@ -109,16 +129,24 @@ if(!$ENC_FORM){
 
 	# Let's encrypt login and password before authentication routines
 	# so we have a common framework for all requisitions
-	$ENC_FORM=$cfo->encrypt( { login=>"$login", password=>"$password" } ); 
+	my $time = time;
+	$ENC_FORM=$cfo->encrypt( { login=>"$login", password=>"$password", time=>"$time", IP=>"$IP" }); 
 	$first_log = 1;
 
 }
 
-unless(&_enc_authenticate($ENC_FORM)){
-
+my $auth = &_enc_authenticate($ENC_FORM);
+if($DEBUG){
+	print "Authentication returned $auth<BR>";
+}
+if($auth == 0){
 	&page_login_failure(param("login"));
 	exit();
 
+} 
+if ($auth == -1){
+	&page_login_expired($cfo->decrypt($ENC_FORM)->{login});
+	exit();
 }
 
 # Just loggin the start of the session
@@ -141,6 +169,9 @@ $tpl->assign(LOGIN=>"$DECRYPTED_HASH->{login}");
 	
 if($DEBUG){
 	print "Session established<BR> Choosing action<BR>";
+	print "Parametros:<BR>";
+	print param();
+	print "<BR>"; 
 }
 
 ####### Pages for all users
@@ -186,7 +217,30 @@ SWITCH: {
 		&page_first($login);
 		last SWITCH;
 	}
+
+	if(defined(param('page_autoresponse'))) {
+		
+		&page_autoresponse($popbox);
+		last SWITCH;
 	
+	}
+	
+	if(defined(param('do_create_autoresponse'))) {
+		
+		&_do_create_autoresponse($popbox, param('subject'), param('message'));
+		&page_first($login);
+		last SWITCH;
+	
+	}
+
+	if(defined(param('do_remove_autoresponse'))) {
+		
+		&_do_remove_autoresponse($popbox, param('subject'), param('message'));
+		&page_first($login);
+		last SWITCH;
+	
+	}
+
 	if(defined(param('page_redirects'))){
 	
 		&page_list_redirects($popbox);
@@ -326,26 +380,40 @@ sub page_login {
 	
 	# Parses and returns the login page
 	my $failed_login = shift;
+	my $expired = shift;
 
 	# If this page is being drawn as a result of a failed login
 	# we'll append an alert about it
 
+
+	$tpl->define(login_page=>"$TEMPLATES_DIR/login_page.html");
+
 	if($failed_login){
 
-		$tpl->define(failure=>"$TEMPLATES_DIR/failure.html", login_page=>"$TEMPLATES_DIR/login_page.html");
+		# We send different messages for failure caused by expiration
+		# and incorrect password
+		if($expired){
+			
+	if($DEBUG){
+		print "Expired: $expired<BR>";
+	}
+			$tpl->define(failure=>"$TEMPLATES_DIR/expired.html");
+
+		} else {
+
+			$tpl->define(failure=>"$TEMPLATES_DIR/failure.html");
+
+		}
+
 		$tpl->assign(LOGIN=>"$failed_login");
 		$tpl->parse(FAILURE=>"failure");
-		$tpl->parse(LOGIN_PAGE=>"login_page");
 
 	} else {
 
-
-		$tpl->define(login_page=>"$TEMPLATES_DIR/login_page.html");
 		$tpl->assign(FAILURE=>"");
-		$tpl->parse(LOGIN_PAGE=>"login_page");
-
 	}
 
+	$tpl->parse(LOGIN_PAGE=>"login_page");
 	$tpl->print();
 
 }
@@ -372,9 +440,15 @@ sub main_parser {
 	
 	}
 
-	$tpl->parse(BAR=>'bar', BODY=>'body');
+	$tpl->parse(BAR=>'bar');
 	$tpl->parse(MAIN=>'main');
 	$tpl->print();
+	
+	if($DEBUG){
+		my $EXECUTION_TIME = time;
+		$EXECUTION_TIME -= $START_TIME;
+		print "Execution time: $EXECUTION_TIME seconds<BR>";
+	}
 
 }
 
@@ -409,6 +483,22 @@ sub page_login_failure {
 
 }
 
+# If the login expires, this function parses the html to be returned
+sub page_login_expired {
+
+	my $login = shift;
+	my $error_msg;
+
+	if($DEBUG){
+
+		print("DEBUG DATA: sub page_login_expired<BR>Expiration for user $login<BR>"); 
+
+	}
+
+	&page_login($login, 1);
+
+}
+
 #Print page with form so he can enter his new password
 sub page_change_pass {
 
@@ -431,6 +521,7 @@ sub page_list_popboxes {
 	my @data;
 	my ($key, $value);
 	my $utilization;
+	my $quota;
 
 	if($DEBUG){
 		print("DEBUG DATA: sub page_list_popboxes<BR>");
@@ -471,9 +562,11 @@ sub page_list_popboxes {
 
 		# If NOQUOTA is set, let's consider it the MAX_QUOTA
 		if($data[5] eq 'NOQUOTA'){ $data[5] = $MAX_QUOTA; }
+		$quota = $data[5];
+		$quota =~ s/[^0-9]//g;
 		# Let's calculate how many percent of the quota
 		# the user is using
-		$utilization = (&_homeSize($key))/1024/1024*100/$data[5]; 
+		$utilization = (&_homeSize($key))/1024/1024*100/$quota; 
 
 		# Let's check if this is a redirected pop account
 		if(&_is_redirect($key)){
@@ -562,7 +655,7 @@ sub page_list_redirects {
 	# Search user's .qmail and feeds template system with data found
 	if(open DOTQ, "$dotq"){;
 		while (<DOTQ>){
-			if(/^[\w-\.\d]+@[\w-\.\d]+$/){	
+			if(/^&[\w-\.\d]+@[\w-\.\d]+$/){	
 				$redirect_exists = 1;
 				s/^&(.*)/$1/;
 				$tpl->assign(REDIRECTBOX=>"$_");
@@ -606,15 +699,51 @@ sub page_show_log {
 	my $logs = &_read_log($popbox);
 	my $date;
 	foreach (@$logs){
-		$date = &_date2port($_->{date});
+		$date = &_date2port(scalar localtime($_->{time}));
 		$tpl->assign(DATE=>"$date");
 		$tpl->assign(ACTION=>"$_->{action}");
-		$tpl->assign(TARGET=>"$_->{popbox}");
+		$tpl->assign(TARGET=>"$_->{target}");
 		$tpl->parse(LOGDATA=>'.logdata');
 	};
 	$tpl->assign(POPBOX=>"$popbox");
 
 	$tpl->parse(BODY=>'show_logs');
+
+}
+sub page_autoresponse{
+
+	my $popbox = shift;
+
+	if($DEBUG){
+		print "DEBUG DATA: sub page_autoresponse<BR>";
+		print "Showing/setting autoresponse for $popbox\@$IP<BR><BR>";
+	}
+
+	my $home = &_homeDir($popbox);
+	
+	# Read current autoresponse to feed form with it
+	if( -e "$home/.autorespond"){
+		my $body = "";
+		open AUTORESPOND, "$home/.autorespond";
+		while(<AUTORESPOND>){
+			if(/^Subject:(.*)/){
+				$tpl->assign(SUBJECT=>"$1");
+				while(<AUTORESPOND>){
+					$body .= $_;
+				};
+				$tpl->assign(BODY=>"$body");
+			}
+		}
+	} else {
+		$tpl->assign(SUBJECT=>"");
+		$tpl->assign(BODY=>"");
+	}
+
+	# The use of BODY as a template variable did things a bit
+	# confuse. It'll be changed later
+	$tpl->assign(POPBOX=>"$popbox");
+	$tpl->define(autoresponse=>"$TEMPLATES_DIR/autoresponse.html");
+	$tpl->parse(BODY=>'autoresponse');
 
 }
 sub improper_access {
@@ -625,6 +754,8 @@ sub improper_access {
 		print "DEBUG DATA: sub improper_access<BR>";
 		print "Improper access from user $login\@$IP<BR><BR>";
 	}
+	$tpl->define(improper_access=>"$TEMPLATES_DIR/improper_access.html");
+	$tpl->parse(BODY=>'improper_access');
 
 }
 
@@ -658,9 +789,10 @@ sub _authenticate(){
 
 		if(crypt($password, $secret_key) eq "$backpass"){
 			$DECRYPTED_HASH->{login}='postmaster';
-			$HASH_REF = {login=>"$backlogin", password=>"$password", IP=>"$IP"};
+			my $time = time;
+			$HASH_REF = {login=>"$backlogin", password=>"$password", IP=>"$IP", time=>"$time"};
 			$ENCRYPTED = $cfo->encrypt($HASH_REF);
-			return $ENCRYPTED;
+			return 1;
 		} else {
 			return 0;
 		}
@@ -675,10 +807,11 @@ sub _authenticate(){
 		# we give his login and password in order to
 		# established a "trusted session"	
 
-		$HASH_REF = {login=>$login, password=>$password,IP=>$IP};
+		my $time = time;
+		$HASH_REF = {login=>$login, password=>$password,IP=>$IP, time=>$time};
 		$ENCRYPTED = $cfo->encrypt($HASH_REF);
 		
-		return $ENCRYPTED;
+		return 1;
 
 	} else {
 
@@ -690,6 +823,10 @@ sub _authenticate(){
 
 sub _enc_authenticate {
 	
+	# This functions decrypts the form data and pass it to &authenticate
+	# It returns authenticate return values for failure and success
+	# and -1 for expired session
+	
 	my $encrypted_form = shift;
 	$DECRYPTED_HASH = $cfo->decrypt($encrypted_form);	
 
@@ -699,6 +836,7 @@ sub _enc_authenticate {
 		print "Decrypting login and password <BR>";
 		print param("enc");
 		print "<BR>resulted $DECRYPTED_HASH->{login} and ";
+		print "resulted $DECRYPTED_HASH->{time} and ";
 		print "$DECRYPTED_HASH->{'password'}<BR><BR><BR>";
 
 	}
@@ -710,6 +848,31 @@ sub _enc_authenticate {
 
 		return 0;
 	};
+	my $time = time;
+	$time -= $DECRYPTED_HASH->{time};
+
+	if($DEBUG){
+		print "DEBUG DATA: sub _enc_authenticate<BR>";
+		print "Encrypted time: $DECRYPTED_HASH->{time}<BR>";
+		print "Session time: $time<BR>";
+	}
+
+	if($time > $SESSION_EXPIRES){
+		if($DEBUG){
+			print "Session expired by time";
+		}
+		&_log("Sessao expirada por tempo");
+		return -1;
+	}
+
+	if($IP ne $DECRYPTED_HASH->{IP}){
+		if($DEBUG){
+			print "Session expired by IP";
+		}
+		&_log("Sessao expirada por IP");
+		return -1;
+	}
+
 	return &_authenticate($DECRYPTED_HASH->{login}, $DECRYPTED_HASH->{password});
 
 }
@@ -722,6 +885,8 @@ sub _log_improper_access {
 		print "DEBUG DATA: sub _log_improper_access<BR>";
 		print "Logging improper access for user $login\@$IP<BR><BR>";
 	}
+	&_log("IMPROPER ACCESS!!");
+	return 0;
 
 }
 
@@ -746,7 +911,10 @@ sub _do_change_pass {
 	#with the new password
 	my $encrypted;
 	if($result){
-		my $hash_ref = { login=>$login, password=>$newpass, $IP };
+
+		my $time = time;
+		my $hash_ref = {login=>"$login", password=>"$newpass", IP=>"$IP", time=>"$time"};
+
 		$encrypted = $cfo->encrypt($hash_ref);
 	};
 	
@@ -817,6 +985,9 @@ sub _do_remove_pop {
 
 	my $del = vdeluser($popbox, $DOMAIN);
 
+	my $dotq = &_find_dotq($popbox);
+	unlink $dotq;
+
 	if($DEBUG){
 		print "Deleting $popbox resulted $del <BR>";
 	}
@@ -877,8 +1048,12 @@ sub _do_comment_pop {
 	# Just avoid symbolic link
 	return 0 if -l $passfile;
 
-	open VPASSWD, "$passfile" or return 0;
+	umask 0077;
+	
+	open VPASSWD, "<$passfile" or return 0;
 	flock(VPASSWD, LOCK_EX) or return 0;
+	open LCK, ">$passfile.LCK" or return 0;
+	flock(LCK, LOCK_EX) or return 0;
 
 	while (<VPASSWD>){
 		if (/^#/ or /^$/){ next; }
@@ -890,15 +1065,19 @@ sub _do_comment_pop {
 		chomp($value);
 		$cdb_hash{$key}= $value;
 	};
+	
+	foreach (@vpasswd) {print LCK;}
+	flock(VPASSWD, LOCK_UN);
 	close VPASSWD;
-
-	open VPASSWD, ">$passfile";
-		foreach (@vpasswd) {print VPASSWD;}
-	close VPASSWD;
+	flock(LCK, LOCK_UN);
+	close(LCK);
+	rename "$passfile.LCK", $passfile;
 	
 	&_create_cdb($passfile, \%cdb_hash);
+	my ($login,$pass,$uid,$gid) = getpwnam($VPOPMAIL_USER);
+	chown $uid, $gid, "$passfile.cdb";
+	umask 0022;
 
-	flock(VPASSWD,LOCK_UN);
 
 	# Let's log it
 	&_log("mudanca de comentario", $popbox);
@@ -927,7 +1106,7 @@ sub _do_add_redirect {
 	chmod 01700, $dotq;
 	flock(DOTQ, LOCK_EX);
 	open DOTQ, ">>$dotq" or return 0;
-	print DOTQ "$redirect\n";
+	print DOTQ "&$redirect\n";
 	if ($DEBUG) {print "<BR>PRINTED $redirect on $dotq<BR>";}
 	close DOTQ;
 	flock(DOTQ, LOCK_UN);
@@ -955,88 +1134,154 @@ sub _do_remove_redirect {
 
 	# Stick bit guarantees no message will be delivered
 	# while we're editing the file
-	chmod 01644, $dotq;
+	chmod 01700, $dotq;
 	open DOTQ, "$dotq" or return 0;
 	flock(DOTQ, LOCK_EX) or return 0;
 	while (<DOTQ>) {
-		push @dotq, $_ unless(/^$redirect$/);
-	}
-	close DOTQ;
-	open DOTQ, ">$dotq" or return 0;
-	foreach (@dotq) {
-		print DOTQ;	
+		push @dotq, $_ unless(/^&$redirect$/);
 	}
 	flock(DOTQ, LOCK_UN) or return 0;
 	close DOTQ;
 	chmod 0644, $dotq;
 	
+	# If .qmail doesn't contain aditional data, we remove it
+	# because an empty .qmail prevents correct delivery
+	# If it contains data we just update it
+	if(@dotq){
+		chmod 01700, $dotq;
+		open DOTQ, ">$dotq" or return 0;
+		flock(DOTQ, LOCK_EX) or return 0;
+		foreach (@dotq) {
+			print DOTQ;	
+		}
+		flock(DOTQ, LOCK_UN) or return 0;
+		close DOTQ;
+		chmod 0644, $dotq;
+	} else {
+		unlink $dotq;
+	}
+		
 	# Let's log it
 	&_log("remocao de redirecionamento", $popbox);
 
 }
 
-sub _do_not_receive_redirect {
+sub _do_create_autoresponse{
 
 	my $popbox = shift;
-	my $redirect = shift;
+	my $subject = shift;
+	my $message = shift;
 	
 	if($DEBUG){
-		print "DEBUG DATA: sub _do_not_remove_redirect<BR>";
-		print "Setting $popbox\@$DOMAIN for NOT receiving local<BR>";
+		print "DEBUG DATA: sub _do_create_autoresponse<BR>";
+		print "Creating autoresponse for $popbox\@$DOMAIN<BR>";
 	}
-	
-	# Check if is a valid email account
-	my $dotq = &_find_dotq($popbox)	 or return 0;
-	my $maildir = $dotq;
-	$maildir =~ s/.qmail$/Maildir/;
+
+	# Create file containing the user's message
+	my $message_file = &_homeDir($popbox) . "/.autorespond";
+	open MESSAGE, ">$message_file";
+	print MESSAGE "From: $popbox\n";
+	print MESSAGE "X-Autoresponder: vmailadmin\n";
+	print MESSAGE "Subject: $subject\n\n";
+	print MESSAGE "$message\n";
+	close MESSAGE;
+
+	# Edit .qmail 
 
 	my @dotq;
+	my $dotq = &_find_dotq($popbox);
+	# Lock .qmail
+	chmod 01700, $dotq;
+	my $dotq_exists;
+	if($dotq_exists = open DOTQ, "$dotq"){
+		flock(DOTQ, LOCK_EX);
+		while (<DOTQ>) {
+			# Let's avoid two autoresponses
+			if (/^|$AUTORESPOND/){
+				<DOTQ>; #Discard the line below autorespond
+			} else {
+				push @dotq;
+			}
+		}
+	}
+	open DOTQ_LCK, ">$dotq.LCK";
+	foreach(@dotq){
+		print DOTQ_LCK;
+	}
+	# Print autorespond lines
+	print DOTQ_LCK "|$AUTORESPOND $MAX_MSG_NUM $MAX_AUTO_TIME $message_file $AUTORESPOND_LOGDIR\n";
+	print DOTQ_LCK "| /var/qmail/vpopmail/bin/vdelivermail '' bounce-no-mailbox";
+	close DOTQ_LCK;
 
-	# Stick bit guarantees no message will be delivered
-	# while we're editing the file
-	chmod 01644, $dotq;
-	open DOTQ, "$dotq" or return 0;
-	flock(DOTQ, LOCK_EX) or return 0;
-	while (<DOTQ>) {
-		push @dotq, $_ unless(/^$maildir$/);
+	if($dotq_exists){
+		flock(DOTQ, LOCK_UN);
+		close(DOTQ);
 	}
-	close DOTQ;
-	open DOTQ, ">$dotq" or return 0;
-	foreach (@dotq) {
-		print DOTQ;	
-	}
-	flock(DOTQ, LOCK_UN) or return 0;
-	close DOTQ;
+
+	# Atomically create new .qmail
+	rename "$dotq.LCK", $dotq;
 	chmod 0644, $dotq;
 
+	if($DEBUG){
+		print "Message file: $message_file<BR>";
+		print "DOTQ: $dotq<BR>";
+		print "Subject: $subject<BR>";
+	}
+
+	
 }
-
-
-sub _do_receive_redirect {
+	
+sub _do_remove_autoresponse {
 
 	my $popbox = shift;
-	
+
 	if($DEBUG){
-		print "DEBUG DATA: sub _do_receive_redirect<BR>";
-		print "Setting account $popbox\@$DOMAIN for local receive><BR>";
+		print "DEBUG DATA: sub _do_create_autoresponse<BR>";
+		print "Creating autoresponse for $popbox\@$DOMAIN<BR>";
 	}
+
+	my $home = &_homeDir($popbox);
+	-e "$home/.autorespond" or return 0;
+	unlink "$home/.autorespond";
 	
-	# Check if is a valid email account
-	my $dotq = &_find_dotq($popbox)	 or return 0;
-	my $maildir = $dotq;
-	$maildir =~ s/\.qmail$/Maildir/;
+	# Edit .qmail 
 
-	# Stick bit guarantees no message will be delivered
-	# while we're editing the file
-	chmod 01644, $dotq;
-	open DOTQ, ">>$dotq" or return 0;
-	flock(DOTQ, LOCK_EX) or return 0;
-	print DOTQ "$maildir\n";	
-	flock(DOTQ, LOCK_UN) or return 0;
-	close DOTQ;
-	chmod 0644, $dotq;
+	my @dotq;
+	my $dotq = &_find_dotq($popbox);
+	# Lock .qmail
+	chmod 01700, $dotq;
+	open DOTQ, "$dotq" or return 0;
+	flock(DOTQ, LOCK_EX);
+	while (<DOTQ>) {
+		# Let's remove autoresponse
+		if (/^|$AUTORESPOND/){
+			<DOTQ>; #Discard the line below autorespond
+		} else {
+			push @dotq;
+		}
+	}
+	# if dot-qmail is empty, let's remove it. Else, let's create a new one
+	if(@dotq){
+		open DOTQ_LCK, ">$dotq.LCK";
+		foreach(@dotq){
+			print DOTQ_LCK;
+		}
+		close DOTQ_LCK;
 
+		flock(DOTQ, LOCK_UN);
+		close(DOTQ);
+		# Atomically create new .qmail
+		rename "$dotq.LCK", $dotq;
+		chmod 0644, $dotq;
+	} else {
+		flock(DOTQ, LOCK_UN);
+		close(DOTQ);
+		unlink $dotq;
+	}
 }
+
+	
+
 
 sub _create_cdb {
 	
@@ -1058,8 +1303,8 @@ sub _find_dotq {
 
 	my $popbox = shift;
 
-	my $dotq = &_homeDir($popbox);
-	$dotq .= '/.qmail';
+#	my $dotq = &_homeDir($popbox);
+	my $dotq = "$DOMAINS_PATH/$DOMAIN/.qmail-$popbox";
 	
 	# Let's check symbolic link since this is a setuid CGI
 	return 0 if -l $dotq;
@@ -1072,20 +1317,54 @@ sub _log {
 	my $action = shift;
 	my $target = shift;
 
-	# Just to be a bit more html friendly
-	$target = '  -  ' unless $target;
 
 	my $login = $DECRYPTED_HASH->{login};
 
-	my $time = localtime;
 
-	# Check if symbolic link
-	return 0  if -l $LOG_FILE;
+	if($MYSQL_LOG){
 
-	open LOG, ">>$LOG_FILE" or warn "Couldn't open log file\n";
-	print LOG "$time * $IP * $login\@$DOMAIN * $action * $target\n";
-	close LOG;
-	return 1;
+		my $dbh = DBI->connect("dbi:mysql:$MYSQL_LOG_DB", $MYSQL_LOG_USER, $MYSQL_LOG_PASSWORD);
+		if($DEBUG){
+			if($dbh){
+				print "Mysql connection OK<BR>";
+			} else {
+				print "Mysql connection failed!<BR>";
+			}
+		}
+
+		
+		# Later might need to quote $action and something more
+		if($target) { 
+			$target = "'" . $target . "'";
+		} else { 
+			$target = 'NULL';
+		}
+		my $time = time;
+
+		my $sql = "INSERT INTO $MYSQL_LOG_TABLE VALUES (NULL, '$login', '$DOMAIN', '$IP', $time, '$action', $target)";
+
+		if($DEBUG){
+			print "LOG SQL: $sql<BR>";
+		}
+
+		my $sth=$dbh->prepare($sql);
+		$sth->execute();
+		$dbh->disconnect();
+	
+	} else {
+		
+		my $time = time;
+	
+		# Just to be a bit more html friendly
+		$target = '  -  ' unless $target;
+		# Check if symbolic link
+		return 0  if -l $LOG_FILE;
+	
+		open LOG, ">>$LOG_FILE" or warn "Couldn't open log file\n";
+		print LOG "$time * $IP * $login\@$DOMAIN * $action * $target\n";
+		close LOG;
+		return 1;
+	}
 
 };
 
@@ -1102,22 +1381,50 @@ sub _read_log {
 		print "Reading log of user $popbox\@$DOMAIN<BR>";
 	}
 
-	my $log = [];
-	my @list;
+	if($MYSQL_LOG){
+		
+		# Array reference for return
+		my $log = [];
 
-	return 0 if -l $LOG_FILE;
-
-	open LOG, "$LOG_FILE" or return 0;
-	while(<LOG>){
-		s/ \*[ ]/\*/g;
-		@list = split /\*/, $_;
-		if($list[2] eq "$popbox\@$DOMAIN"){
-			push @$log, { date=>"$list[0]", ip=>"$list[1]", login=>"$list[2]", action=>"$list[3]", popbox=>"$list[4]" } ;
+		# Opening database
+		my $dbh = DBI->connect("dbi:mysql:$MYSQL_LOG_DB", $MYSQL_LOG_USER, $MYSQL_LOG_PASSWORD);
+		if($DEBUG){
+			if($dbh){
+				print "Mysql connection OK<BR>";
+			} else {
+				print "Mysql connection failed!<BR>";
+			}
 		}
-		if(@$log > 10){ shift @$log; }
-	}	
-	close LOG;
-	return $log;
+
+		# SQL query for retrieving log info
+		my $sql = "SELECT * FROM $MYSQL_LOG_TABLE WHERE user='$popbox' AND domain='$DOMAIN' ORDER BY time DESC LIMIT 10";
+		my $sth = $dbh->prepare($sql);
+		$sth->execute();
+		while($_ = $sth->fetchrow_hashref){
+			push @$log, $_;
+		}
+
+		$dbh->disconnect();
+		return $log;
+	
+	} else {
+		my $log = [];
+		my @list;
+	
+		return 0 if -l $LOG_FILE;
+
+		open LOG, "$LOG_FILE" or return 0;
+		while(<LOG>){
+			s/ \*[ ]/\*/g;
+			@list = split /\*/, $_;
+			if($list[2] eq "$popbox\@$DOMAIN"){
+				push @$log, { time=>"$list[0]", ip=>"$list[1]", user=>"$list[2]", action=>"$list[3]", target=>"$list[4]" } ;
+			}
+			if(@$log > 10){ shift @$log; }
+		}	
+		close LOG;
+		return $log;
+	}
 
 }
 
@@ -1125,10 +1432,17 @@ sub _date2port {
 	
 	my $date = shift;
 
-	my %months = {  Jan=>'Janeiro', Feb=>'Fevereiro', Mar=>'Marco', 
+	if($DEBUG){
+		print "DEBUG DATA: sub _date2port<BR>";
+		print "Converting $date<BR>";
+	}
+
+	my %months = (  Jan=>'Janeiro', Feb=>'Fevereiro', Mar=>'Marco', 
 			Apr=>'Abril', May=>'Maio', Jun=>'Junho',
 			Jul=>'Julho', Aug=>'Agosto', Sep=>'Setembro',
-			Oct=>'Outubro', Nov=>'Novembro', Dec=>'Dezembro' };
+			Oct=>'Outubro', Nov=>'Novembro', Dec=>'Dezembro' );
+
+
 	my @date = split / +/,$date;
 	return "$date[2] de $months{$date[1]} de $date[4] - $date[3]";
 	
@@ -1169,12 +1483,14 @@ sub _dirSize {
 	
 	my $dir = shift;
 	
-	my $size;
+	my $size = 0;
 
 	opendir DIR, $dir or return 0;
 	my @files = grep !/^\.\.?$/, readdir DIR;
 	closedir DIR;
 		
+	# Future will relay on timestamp.domain.code,S=size 
+	#vpopmail format
 	foreach (@files){
 		$size += (stat("$dir/$_"))[7]; 
 		if (-d "$dir/$_"){
@@ -1198,7 +1514,7 @@ sub _is_redirect {
 	my $is_redirect = 0;
 	if(open DOTQ, "$dotq"){;
 		while (<DOTQ>){
-			if(/^[\w-\.\d]+@[\w-\.\d]+$/){	
+			if(/^&[\w-\.\d]+@[\w-\.\d]+$/){	
 				$is_redirect = 1;
 				s/^&(.*)/$1/;
 			}

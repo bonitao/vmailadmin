@@ -1,0 +1,58 @@
+
+<H2 ALIGN=CENTER> Umleitungen f&uuml;r $POPBOX@$DOMAIN </H2>
+<CENTER><TABLE><TR>
+<TD>
+        <INPUT TYPE=SUBMIT NAME="do_add_redirect" VALUE="Neue Umleitung"  onclick="document.main_form.button.value='add_redirect'">
+      </TD>
+<TD><INPUT TYPE=TEXT NAME=new_redirect></TD></TR>
+$REDIRECT_REMOVE
+</TABLE></CENTER>
+<TABLE WIDTH=100%>
+$REDIRECT
+</TABLE>
+
+
+<INPUT TYPE=HIDDEN NAME=popbox VALUE='$POPBOX'>
+<INPUT TYPE=HIDDEN NAME=button VALUE="">
+
+<SCRIPT LANGUAGE="JavaScript">
+function validate_form(){
+	var form = document.main_form;
+	var button = form.button.value;
+
+	if(button == 'add_redirect'){
+		var regexp = /[\w-\.\d]+@[\w-\.\d]+/;
+		if(!(regexp.test(form.new_redirect.value))){
+			alert("Please enter a valid email");
+			return false;
+		}
+		if(form.new_redirect.value == form.popbox.value+'@'+'$DOMAIN'){
+			alert("You cannot recursively redirect");
+			return false;
+		};
+	}
+	if(button == 'remove_redirect'){
+		var redirect = false;
+		var isArray = (form.redirect.length) ? true : false;
+		if(isArray){
+			for(i=0; i < form.redirect.length; i++){
+				if(form.redirect[i].checked){
+					redirect = form.redirect[i].value;
+				}
+			}
+		} else {
+			if(form.redirect.checked){
+				redirect = form.redirect.value;
+			}
+		}
+		if(!redirect){
+			alert("You must choose a redirect.");
+			return false;
+		} else {
+			return confirm("Really remove redirect " + redirect + "?");
+		}
+	}
+	return true;
+}
+</SCRIPT>
+

@@ -1,0 +1,45 @@
+<H2 ALIGN=CENTER> Caixas postais no dominio $DOMAIN </H2>
+<CENTER><TABLE>
+<TR>
+<TD><INPUT TYPE=SUBMIT NAME="page_add_pop" VALUE="Adicionar" onclick="document.main_form.button.value='add_pop'"></TD>
+<TD><INPUT TYPE=SUBMIT NAME="do_remove_pop" VALUE="Remover" onclick="document.main_form.button.value='remove_pop'"></TD>
+<TD><INPUT TYPE=SUBMIT NAME="page_quota_pop" VALUE="Quota" onclick="document.main_form.button.value=''"></TD>
+<TD><INPUT TYPE=SUBMIT NAME="page_comment_pop" VALUE="Comentario" onclick="document.main_form.button.value=''"></TD>
+<TD><INPUT TYPE=SUBMIT NAME="page_change_pass" VALUE="Senha" onclick="document.main_form.button.value=''"></TD>
+<TD><INPUT TYPE=SUBMIT NAME="page_redirects" VALUE="Redirecionamentos" onclick="document.main_form.button.value=''"></TD>
+</TR></TABLE></CENTER>
+<TABLE WIDTH=100%>
+<TR><TD></TD><TD>Conta</TD><TD>Comentario</TD><TD>Quota</TD><TD>Utilizacao</TD>
+<TD>Redirecionada</TD></TR>
+$POPBOX
+</TABLE>
+
+<INPUT TYPE=HIDDEN NAME=button VALUE="">
+<SCRIPT LANGUAGE="JavaScript">
+function validate_form(){
+	var form = document.main_form;
+	var button = form.button.value;
+
+	var popbox = false;
+	if(button != 'add_pop'){
+		for(i=0; i< form.popbox.length; i++){
+			if(form.popbox[i].checked){
+				popbox=form.popbox[i];
+			}
+		}			
+		if(!popbox){ 
+			alert("Voce precisa escolher uma caixa postal!");
+			return false;
+		};
+	}
+	if(button == 'remove_pop'){
+		if(popbox.value == 'postmaster'){
+			alert("Voce nao pode remover o usuario administrativo!");
+			return false;
+		}
+		return confirm("Deseja realmente remover " + popbox.value + "?");
+	}
+	return true;
+}
+</SCRIPT>
+

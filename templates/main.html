@@ -1,0 +1,14 @@
+<HTML><HEAD><BODY BGCOLOR=#FFFFFF>
+<SCRIPT LANGUAGE="JavaScript">
+function validate_form(){
+	return true;
+}
+</SCRIPT>
+<FORM ACTION=$URL METHOD=POST onsubmit='return validate_form()' NAME=main_form>
+<INPUT TYPE=HIDDEN VALUE=$ENC_FORM NAME=enc>
+<CENTER><TABLE WIDTH=540 BGCOLOR="F0F0F0" CELLSPACING=0>
+<TR> <TD WIDTH=20% VALIGN=TOP>$BAR</TD></TR>
+<TR><TD WIDTH=80% VALIGN=TOP>$BODY</TD></TR>
+</TABLE>
+</FORM>
+</HTML>

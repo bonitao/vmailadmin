@@ -47,7 +47,7 @@ my $VPOPMAIL_AUTH = 'cdb';
 
 # If you have installed vpopmail with mysql support,
 # you must configure the fields below
-my $VPOPMAIL_AUTH = 'mysql'; 
+#my $VPOPMAIL_AUTH = 'mysql'; 
 my $VPOPMAIL_MYSQL_HOST = 'localhost';
 my $VPOPMAIL_MYSQL_USER = 'root';
 my $VPOPMAIL_MYSQL_PASSWD = 'd@ta';

@@ -1,7 +1,7 @@
 <H2 ALIGN=CENTER>Quota settings for $POPBOX@$DOMAIN</H2>
 <CENTER>
-Nova quota: <INPUT TYPE=TEXT SIZE=2 NAME=new_quota>M<BR>
-<INPUT TYPE=SUBMIT VALUE="Definir">
+New quota: <INPUT TYPE=TEXT SIZE=2 NAME=new_quota>M<BR>
+<INPUT TYPE=SUBMIT VALUE="Define">
 
 <INPUT TYPE=HIDDEN NAME='do_quota_pop' VALUE=1>
 <INPUT TYPE=HIDDEN NAME=popbox VALUE='$POPBOX'>
@@ -9,8 +9,8 @@ Nova quota: <INPUT TYPE=TEXT SIZE=2 NAME=new_quota>M<BR>
 function validate_form(){
 	var form = document.main_form;
 	var quota = form.new_quota.value;
-	if( (isNaN(quota)) || (quota > 50) ){
-		alert("Quota must be an integer between 1 and 50");
+	if( (isNaN(quota)) || (quota > $MAX_QUOTA) ){
+		alert("Quota must be an integer between 1 and $MAX_QUOTA");
 		return false;
 	}
 	return true;

@@ -36,9 +36,9 @@ use DBI;
 my $DEBUG=0;
 
 my $DOMAINS_PATH='/var/qmail/vpopmail/domains';
-my $TEMPLATES_DIR='/domains/emailadmin/templates';
+my $TEMPLATES_DIR='/domains/emailadmin/templates-pt_br';
 my $secret_key='ab'; # The key used in SHA encription
-my $MAX_QUOTA = '50M'; # Maximum quota users will be allowed to set
+my $MAX_QUOTA = '50'; # Maximum quota users will be allowed to set, in megabytes
 
 my $VPOPMAIL_USER = 'vpopmail'; # User under which vpopmail run 
 my $VPOPMAIL_GROUP = 'vchkpw'; # Group under which vpopmail run
@@ -50,7 +50,7 @@ my $VPOPMAIL_AUTH = 'cdb';
 #my $VPOPMAIL_AUTH = 'mysql'; 
 my $VPOPMAIL_MYSQL_HOST = 'localhost';
 my $VPOPMAIL_MYSQL_USER = 'root';
-my $VPOPMAIL_MYSQL_PASSWD = 'd@ta';
+my $VPOPMAIL_MYSQL_PASSWD = 'mypass';
 my $VPOPMAIL_MYSQL_DB='vpopmail';
 my $VPOPMAIL_MYSQL_TABLE='vpopmail';
 
@@ -116,6 +116,10 @@ $ENV{PATH} = '/bin:/usr/bin';
 $ENV{SHELL} = '/bin/sh' if exists $ENV{SHELL};
 delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 
+# UNTESTED CODE! Must test all LOG_MSGS related stuff
+# Get the log messages from template
+my $LOG_MSGS = &_retrieve_log_template();
+
 
 print header;
 
@@ -178,7 +182,7 @@ if ($auth == -1){
 
 # Just logging the start of the session
 if($first_log){
-	&_log("sessao estabelecida");
+	&_log($LOG_MSGS->{"SESSION_ESTABLISHED"});
 }
 
 #Since authentication has been done, login is also available
@@ -277,19 +281,19 @@ SWITCH: {
 		last SWITCH;
 	}
 	
-	if(defined(param('do_add_redirect'))){
-	
-		&_do_add_redirect($popbox, param('new_redirect'));
-		&page_list_redirects($popbox);
-		last SWITCH;
-	}
-	
 	if(defined(param('do_remove_redirect'))){
 	
 		&_do_remove_redirect($popbox, param('redirect'));
 		&page_list_redirects($popbox);
 		last SWITCH;
 	
+	}
+	
+	if(defined(param('do_add_redirect'))){
+	
+		&_do_add_redirect($popbox, param('new_redirect'));
+		&page_list_redirects($popbox);
+		last SWITCH;
 	}
 
 	if(defined(param('page_show_log'))){
@@ -606,6 +610,7 @@ sub page_quota_pop {
 
 	$tpl->define(quota_pop=>"$TEMPLATES_DIR/quota_pop.html");
 	$tpl->assign(POPBOX=>"$popbox");
+	$tpl->assign(MAX_QUOTA=>"$MAX_QUOTA");
 	$tpl->parse(BODY=>'quota_pop');
 
 }
@@ -855,7 +860,7 @@ sub _enc_authenticate {
 		if($DEBUG){
 			print "Session expired by time";
 		}
-		&_log("Sessao expirada por tempo");
+		&_log($LOG_MSGS->{"SESSION_EXPIRED_TIME"});
 		return -1;
 	}
 
@@ -863,7 +868,7 @@ sub _enc_authenticate {
 		if($DEBUG){
 			print "Session expired by IP";
 		}
-		&_log("Sessao expirada por IP");
+		&_log($LOG_MSGS->{"SESSION_EXPIRED_IP"});
 		return -1;
 	}
 
@@ -879,7 +884,7 @@ sub _log_improper_access {
 		print "DEBUG DATA: sub _log_improper_access<BR>";
 		print "Logging improper access for user $login\@$IP<BR><BR>";
 	}
-	&_log("IMPROPER ACCESS!!");
+	&_log($LOG_MSGS->{"IMPROPER_ACCESS"});
 	return 0;
 
 }
@@ -921,7 +926,7 @@ sub _do_change_pass {
 	};
 	
 	# Let's log it
-	&_log("mudanca de senha", $login);
+	&_log($LOG_MSGS->{"PASSWORD_CHANGE"}, $login);
 
 	return $encrypted;
 
@@ -954,8 +959,8 @@ sub _do_new_pop {
 	}
 
 	#Simple validation of user data
-	unless($quota =~ /[0-9]+/){ $quota = 50; }
-	if($quota > 50) { $quota = 50; }
+	unless($quota =~ /[0-9]+/){ $quota = $MAX_QUOTA; }
+	if($quota > $MAX_QUOTA) { $quota = $MAX_QUOTA; }
 	$quota .= 'M';
 	
 	my $add;
@@ -1003,7 +1008,7 @@ sub _do_new_pop {
 	# The vpopmail library return shell values. ARGH
 	
 	# Let's log it
-	&_log("criacao de conta", $login);
+	&_log($LOG_MSGS->{"ACCOUNT_CREATION"}, $login);
 	
 	if ($ADMIN_PROFTPD){
 		return (!($add || $setquota || $system));
@@ -1062,7 +1067,7 @@ sub _do_remove_pop {
 	}
 
 	# Let's log it
-	&_log("remocao de conta", $popbox);
+	&_log($LOG_MSGS->{"ACCOUNT_REMOTION"}, $popbox);
 
 	# The vpopmail library return shell values. ARGH
 	if ($ADMIN_PROFTPD){
@@ -1092,7 +1097,7 @@ sub _do_quota_pop {
 	}
 
 	# Let's log it
-	&_log("mudanca de quota", $popbox);
+	&_log($LOG_MSGS->{"QUOTA_CHANGE"}, $popbox);
 
 	return (!$setquota);
 
@@ -1130,7 +1135,7 @@ sub _do_comment_pop {
 		flock(LCK, LOCK_EX) or return 0;
 
 		while (<VPASSWD>){
-			if (/^#/ or /^$/){ next; }
+			if (/^\s*#/ or /^\s*$/){ next; }
 			@data = split /:/;	
 			if (/^$popbox:/) {$data[4] = $new_comment};
 			$key = shift @data;
@@ -1176,7 +1181,7 @@ sub _do_comment_pop {
 
 
 	# Let's log it
-	&_log("mudanca de comentario", $popbox);
+	&_log($LOG_MSGS->{"COMMENT_CHANGE"}, $popbox);
 
 }
 
@@ -1209,7 +1214,7 @@ sub _do_add_redirect {
 	chmod 0644, $dotq;
 	
 	# Let's log it
-	&_log("criacao de redirecionamento", $popbox);
+	&_log($LOG_MSGS->{"REDIRECT_CREATION"}, $popbox);
 }
 
 sub _do_remove_redirect {
@@ -1258,7 +1263,7 @@ sub _do_remove_redirect {
 	}
 		
 	# Let's log it
-	&_log("remocao de redirecionamento", $popbox);
+	&_log($LOG_MSGS->{"REDIRECT_REMOTION"}, $popbox);
 
 }
 
@@ -1463,6 +1468,27 @@ sub _log {
 
 };
 
+sub _retrieve_log_template {
+
+	if($DEBUG){
+		print "DEBUG DATA: sub _retrieve_log_template<BR>";
+		print "Loading log template $TEMPLATES_DIR/log_messages";
+	}
+
+	my @array;
+	my $LOG_MSGS = {};
+	open LOG, "$TEMPLATES_DIR/log_messages" or return 0;
+	while (<LOG>){
+		next if (/^\s*#/ or /^\s*$/);
+		s/^\s+//;
+		s/\s+$//;
+		@array = split /\s*=\s*/;
+		${$LOG_MSGS{$array[0]}} =$array[1]; 
+	}
+	return $LOG_MSGS;
+}
+		
+		
 sub _read_log {
 
 	# Function not correctly implemented, because the intention
@@ -1678,7 +1704,7 @@ sub _retrieve_popboxes {
 			# CDB gives a colon separated string with 
 			#the popbox info fields. Let's turn it into a hash
 			@data = split /:/, $value;
-			if($data[5] eq 'NOQUOTA'){ $data[5] = $MAX_QUOTA; }
+			if($data[5] eq 'NOQUOTA'){ $data[5] = $MAX_QUOTA."M"; }
 			push @popboxes, {pw_name => $key, pw_gecos => $data[3], pw_shell => $data[5]}; 
 
 		}

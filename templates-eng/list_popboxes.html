@@ -25,6 +25,18 @@ function validate_form(){
 
 	var popbox = false;
 	if(button != 'add_pop'){
+		var isArray = (form.popbox.length) ? true : false;
+		if(isArray){
+			for(i=0; i< form.popbox.length; i++){
+				if(form.popbox[i].checked){
+					popbox=form.popbox[i];
+				}
+			}			
+		} else {
+			if(form.popbox.checked){
+				popbox = form.popbox.value;
+			}
+		}
 		for(i=0; i< form.popbox.length; i++){
 			if(form.popbox[i].checked){
 				popbox=form.popbox[i];

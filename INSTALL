@@ -2,28 +2,61 @@ Uhm, no easy install yet
 
 1. Edit vmailadmin.pl and change configuration session to suit your needs
 
-2. If using mysql log (by now it's useless, but will become important) create and setup appropriate users, tables and db.
+2. Install perl modules that are needed. The hardest will be 
+vpopmail.pm. You can fetch it at
+ftp://ftp.cpan.org/CPAN/authors/id/S/SS/SSCANLON/vpopmail-0.02.tar.gz
+It doesn't compile cleanly with new versions of vpopmail. You can
+find a dirty patch to make it work at http://vmailadmin.sourceforge.net
+!Be aware that calling vadddomain within perl after applying this patch
+may generate a security flaw!
+I promess I'll write a new module for vpopmail as soon as I can
+
+3. If using mysql log create and setup appropriate users, tables and db.
 Log table should be like:
 create table vmailadmin ( id INT UNSIGNED AUTO_INCREMENT NOT NULL, user VARCHAR(31), domain varchar(255), ip VARCHAR(15), time INT(10) UNSIGNED NOT NULL, action VARCHAR(31), target VARCHAR(31), PRIMARY KEY(id), INDEX(time));
 The user you configured in vmailadmin.pl must have select and insert priviliges into this table
 
-3. Copy vmaildmin.pl and templates dir to some directory.
+4. Copy vmaildmin.pl and templates dir to some directory.
 Insert into httpd.conf an scriptalias or alias + .htaccess as you like
 
-4. If you haven't got perl patch against suidperl exploit, get it now.
+5. If you haven't got perl patch against suidperl exploit, get it now.
 Search www.securityfocus.com for suidperl for more info.
 
-5. Set suid bit:
+6. Set suid bit:
 chown root.root vmailadmin.pl
 chmod 4755 vmailadmin.pl
 
-6. Certify suidperl is suid
+7. Certify suidperl is suid
 chmod 4755 /usr/bin/suidperl
 
-7. Test it.
+8. Test it.
 
-8. Drink a beer or a milk or whatever
+9. Drink a beer or a milk or whatever
 
 If it doesn't work, read again the instalation and try it again.
-If not works anyway, send me an email (davi@sourceforge.net) and try to help
-you as much as I can.
+If it still doesn't work edit the script and turn $DEBUG=1. It might help.
+Take a look at common problems some people has found.
+If it still doesn't work, drop me an email and I'll try my best.
+
+
+10. Some common problems:
+
+10.1 Can't install vpopmail.pm!
+Apply the patch I told in item 2 or just take a look at it and do yourself.
+If using mysql, edit it Makefile including -lmysqlclient and -L/usr/mysql/libs
+or relevant path.
+
+10.2 I enter www.domain.com/vmailadmin and when I try to log I end at www.otherdomain.com/vmailadmin
+
+Be sure UseCanonicalNames is on in httpd.conf
+Remember <VirtualHost> syntax has changed in apache 1.3 It should be
+<VirtualHost 192.168.0.1> not <VirtualHost www.domain.com>
+
+10.3 Everything works but I can't login!
+Turn on debugging and if everything seems correct except that _enc_authenticate
+returns 0, them probably your script can't access vpasswd.cdb
+Recheck suidbits for vmailadmin.cgi and suidperl. Some distros, as SuSE,
+change suidperl suidbit without telling you. If it is the case, look at
+/etc/permissions.*
+
+

@@ -28,6 +28,8 @@ function validate_form(){
 			return false;
 		};
 	}
+	// If there is just one radio option, stupid JS, doesn't see
+	// it as a array of length 1, but as a single variable
 	if(button == 'remove_redirect'){
 		var redirect = false;
 		var isArray = (form.redirect.length) ? true : false;

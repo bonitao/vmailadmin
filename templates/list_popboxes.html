@@ -24,12 +24,21 @@ function validate_form(){
 	var button = form.button.value;
 
 	var popbox = false;
+	// If there is just one radio option, stupid JS, doesn't see
+	// it as a array of length 1, but as a single variable
 	if(button != 'add_pop'){
-		for(i=0; i< form.popbox.length; i++){
-			if(form.popbox[i].checked){
-				popbox=form.popbox[i];
+		var isArray = (form.popbox.length) ? true : false;
+		if(isArray){
+			for(i=0; i< form.popbox.length; i++){
+				if(form.popbox[i].checked){
+					popbox=form.popbox[i];
+				}
+			}			
+		} else {
+			if(form.popbox.checked){
+				popbox = form.popbox.value;
 			}
-		}			
+		}
 		if(!popbox){ 
 			alert("Voce precisa escolher uma caixa postal!");
 			return false;

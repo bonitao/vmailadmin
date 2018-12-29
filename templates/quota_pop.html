@@ -1,0 +1,18 @@
+<H2 ALIGN=CENTER>Definicao de quota da conta pop $POPBOX@$DOMAIN</H2>
+<CENTER>
+Nova quota: <INPUT TYPE=TEXT SIZE=2 NAME=new_quota>M<BR>
+<INPUT TYPE=SUBMIT VALUE="Definir">
+
+<INPUT TYPE=HIDDEN NAME='do_quota_pop' VALUE=1>
+<INPUT TYPE=HIDDEN NAME=popbox VALUE='$POPBOX'>
+<SCRIPT LANGUAGE="JavaScript">
+function validate_form(){
+	var form = document.main_form;
+	var quota = form.new_quota.value;
+	if( (isNaN(quota)) || (quota > 50) ){
+		alert("A quota deve ser um inteiro entre 1 e 50");
+		return false;
+	}
+	return true;
+}
+</SCRIPT>

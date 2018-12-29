@@ -1,0 +1,13 @@
+0.7.4p0
+English templates correction by Johannes Peeters (jpeeters@lashout.net)
+Quota correction by Johannes Peeters (jpeeters@lashout.net)
+INSTALL file corrections by Johannes Peeters (jpeeters@lashout.net)
+0.7.4
+German templates added by Christian Metzen
+Brazilian portuguese templates modified for better
+alignment by Wildcat <wildcat@avati.com.br>
+0.7.3
+Primary support for managing proftpd and mod_frontpage in
+machines that hosts a single domain.
+0.7.2
+Support for vpopmail + mysql

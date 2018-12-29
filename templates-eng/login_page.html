@@ -1,0 +1,64 @@
+<HTML>
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML Level 3//EN//3.0">
+<STYLE  TYPE="text/css">
+<!--
+TABLE {    font-size: 10pt;
+	color: black; 
+	font-family: Verdana, Arial, sans-serif;
+	background-color: lightblue;
+}
+.main {
+	border: thick black double;
+}
+.data {
+}
+
+H2 { 	
+	margin: 10pt;
+	padding: 5pt;
+	color: black; 
+	font-size: 12pt; 
+	font-weight: bold;
+	border: thin black ridge;
+	font-family: Arial, sans-serif }
+
+A:link { color: blue;
+	font-weight: bolder;
+	text-decoration: none; }
+A:visited { color: blue;
+	font-weight: bolder;
+	text-decoration: none; }
+-->
+</STYLE>
+
+<HEAD><TITLE>Email administration - $DOMAIN</title></head>
+
+<BODY BGCOLOR="#FFFFFF">
+<FORM NAME=auth ACTION="$URL" METHOD=POST>
+<INPUT TYPE=HIDDEN NAME="page_first" VALUE=1>
+<CENTER>
+<TABLE BORDER="1" ALIGN="center" VALIGN="middle" CLASS=main>
+<TR><TD COLSPAN="2" ALIGN="center" VALIGN="middle">
+Email administration - $DOMAIN 
+</TD></TR>
+<TR>
+<TD ALIGN="left">User</TD>
+<TD ALIGN="right"><INPUT TYPE=TEXT SIZE=8 NAME=login></TD>
+</TR>
+<TR>
+<TD ALIGN="left">Password</TD>
+<TD ALIGN="right"><INPUT TYPE=PASSWORD SIZE=8 NAME=password></TD>
+</TR>
+<TR>
+<TD ALIGN="center" COLSPAN=2><INPUT TYPE=SUBMIT VALUE="Do it"></TD>
+</TR>
+
+</TABLE>
+</FORM>
+
+$FAILURE
+
+<CENTER>All actions will be logged for your safety</CENTER>
+</CENTER>
+</body>
+</HTML>

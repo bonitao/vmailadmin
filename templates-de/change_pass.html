@@ -1,0 +1,38 @@
+<CENTER>
+  <H2 ALIGN=CENTER>Password &auml;ndern f&uuml;r $POPBOX@$DOMAIN</H2>
+<CENTER>
+    Neues Password: 
+    <INPUT TYPE=PASSWORD SIZE=8 NAME=newpass><BR>
+    Best&auml;tigen: 
+    <INPUT TYPE=PASSWORD SIZE=8 NAME=newpass2><BR>
+    <INPUT TYPE=SUBMIT VALUE=Setzen>
+</CENTER>
+
+
+<INPUT TYPE=HIDDEN NAME="do_change_pass" VALUE=1>
+<INPUT TYPE=HIDDEN NAME="popbox" VALUE=$POPBOX>
+<SCRIPT LANGUAGE="JavaScript">
+function validate_form(){
+	var form = document.main_form;
+	if(form.newpass.value.length < 4){
+		alert("Your password must have at least 4 characters");
+		return false;
+	}
+	var regexp = new RegExp(form.newpass.value, 'i');
+	if(regexp.test(form.popbox.value)){
+		alert("Your login cannot contain your password!");
+		return false;
+	}
+	regexp = new RegExp(form.popbox.value, 'i');
+	if(regexp.test(form.newpass.value)){
+		alert("Your password cannot contain you login!");
+		return false;
+	}
+	if(form.newpass.value != form.newpass2.value){
+		alert("Password not correctly confirmed!");
+		return false;
+	}
+	return true;
+}
+</SCRIPT>
+</center>

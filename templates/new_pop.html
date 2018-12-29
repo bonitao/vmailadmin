@@ -1,0 +1,43 @@
+<H2 ALIGN=CENTER>Criacao de conta pop</H2>
+<CENTER>
+Login: <INPUT TYPE=TEXT NAME=new_login><BR>
+Senha: <INPUT TYPE=PASSWORD NAME=new_pass><BR>
+Nome: <INPUT TYPE=TEXT NAME=new_name><BR>
+Quota: <INPUT TYPE=TEXT SIZE=2 NAME=new_quota>M<BR>
+<INPUT TYPE=SUBMIT VALUE="Criar">
+
+
+<INPUT TYPE=HIDDEN NAME='do_new_pop' VALUE=1>
+<SCRIPT LANGUAGE="JavaScript1.1">
+function validate_form(){
+	var form = document.main_form;
+	if(form.new_pass.value.length < 4){
+		alert("Sua senha deve conter no minimo 4 caracteres");
+		return false;
+	}
+	var regexp = new RegExp(form.new_pass.value, 'i');
+	if(regexp.test(form.new_login.value)){
+		alert("Seu login nao pode conter sua senha!");
+		return false;
+	}
+	regexp = new RegExp(form.new_login.value, 'i');
+	if(regexp.test(form.new_pass.value)){
+		alert("Sua senha nao pode conter seu login");
+		return false;
+	}
+	//Some help for the user
+	if(form.new_quota.value.length==0){
+		form.new_quota.value=50;
+	}
+	if(form.new_pop.length==0){
+		form.new_pop.value=form.new_login.value;
+	}
+
+	var quota = form.new_quota.value;
+	if( (isNaN(quota)) || (quota > 50) ){
+		alert("A quota deve ser um inteiro entre 1 e 50");
+		return false;
+	}
+	return true;
+}
+</SCRIPT>
